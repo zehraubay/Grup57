@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+sqlalchemy
+python-jose
+passlib[bcrypt]
+email-validator
+pydantic
+python-dotenv
+google-generativeai
+jinja2
+openai

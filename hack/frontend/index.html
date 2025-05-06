@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini Chatbot</title>
+  <!-- Linking Google Fonts for Icons -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@32,400,0,0"/>
+  <link rel="stylesheet" href="/frontend/interactive.css">
+  <link rel="stylesheet" href="/frontend/style.css">
+  <script defer src="/frontend/interactivespider.js"></script>
+  <script defer src="/frontend/script.js"></script>
+  <script defer src="/frontend/barkod.js"></script>
+  <script src="https://unpkg.com/@zxing/browser@latest"></script>
+  <script src="https://unpkg.com/@zxing/library@latest"></script>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div class="container">
+    <!-- App Header -->
+    <header class="app-header">
+      <h1 class="heading">Merhaba</h1>
+      <h4 class="sub-heading">Size nasıl yardımcı olabilirim?</h4>
+    </header>
+
+    <!-- Suggestions -->
+    <ul class="suggestions">
+      <li class="suggestions-item">
+        <p class="text">Bir ürünün barkodunu tarayarak içeriğinde PFAS, palm yağı gibi çevresel açıdan riskli maddeleri keşfedin.</p>
+        <span class="icon material-symbols-rounded">draw</span>
+      </li>
+      <li class="suggestions-item">
+        <p class="text">Karbon ayak izi verileriyle birlikte sürdürülebilirlik skorunu görüntüleyin.</p>
+        <span class="icon material-symbols-rounded">lightbulb</span>
+      </li>
+      <li class="suggestions-item">
+        <p class="text">Su krizi, iklim göçü, gıda kıtlığı gibi senaryolar için gelecek yıllara dair yapay zeka destekli geleceği keşfedin.</p>
+        <span class="icon material-symbols-rounded">explore</span>
+      </li>
+      <li class="suggestions-item">
+        <p class="text">Hikâyeleştirilmiş senaryolar ve çözüm yollarıyla farkındalık kazanın.</p>
+        <span class="icon material-symbols-rounded">code_blocks</span>
+      </li>
+    </ul>
+
+    <!-- Chat Container -->
+    <div class="chats-container"></div>
+
+    <!-- Prompt Container -->
+    <div class="prompt-container">
+      <div class="prompt-wrapper">
+        <form class="prompt-form">
+          <input type="text" placeholder="Ask Gemini" class="prompt-input" required />
+          <div class="prompt-actions">
+            <!-- ✅ Barkod Butonu -->
+            <button id="barcode-btn" type="button" class="material-symbols-rounded">qr_code_scanner</button>
+
+            <!-- Dosya Yükleme -->
+            <div class="file-upload-wrapper">
+              <img src="#" class="file-preview" />
+              <input id="file-input" type="file" accept="image/*, .pdf, .txt, .csv" hidden />
+              <button type="button" class="file-icon material-symbols-rounded">description</button>
+              <button id="cancel-file-btn" type="button" class="material-symbols-rounded">close</button>
+              <button id="add-file-btn" type="button" class="material-symbols-rounded">attach_file</button>
+            </div>
+
+            <!-- Gönder & Durdur -->
+            <button id="stop-response-btn" type="button" class="material-symbols-rounded">stop_circle</button>
+            <button id="send-prompt-btn" class="material-symbols-rounded">arrow_upward</button>
+          </div>
+        </form>
+
+        <!-- Tema & Temizle -->
+        <button id="theme-toggle-btn" class="material-symbols-rounded">light_mode</button>
+        <button id="delete-chats-btn" class="material-symbols-rounded">delete</button>
+      </div>
+      <p class="disclaimer-text">Gemini hata yapabilir. Bilgilerinizi iki kez kontrol edin.</p>
+    </div>
+  </div>
+
+  <!-- ✅ Barkod Modalı -->
+  <div id="barcode-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background-color:#000000aa; justify-content:center; align-items:center;">
+    <div style="background:#fff; padding:20px; border-radius:12px; max-width:320px; text-align:center;">
+      <h3>Ürün Barkodunu Tara</h3>
+      <video id="barcode-video" width="280" height="200" style="border:1px solid black;" autoplay></video>
+      <p id="barcode-result">Bekleniyor...</p>
+      <button onclick="closeBarcodeModal()">Kapat</button>
+    </div>
+  </div>
+
+  <!-- Scriptler -->
+  <script src="/frontend/script.js"></script>
+  <script>
+    const barcodeModal = document.getElementById("barcode-modal");
+    const barcodeVideo = document.getElementById("barcode-video");
+    const barcodeResult = document.getElementById("barcode-result");
+
+    document.getElementById("barcode-btn").addEventListener("click", () => {
+      barcodeModal.style.display = "flex";
+      startBarcodeScanner();
+    });
+
+    function closeBarcodeModal() {
+      barcodeModal.style.display = "none";
+      if (window.barcodeReader) {
+        window.barcodeReader.reset();
+      }
+    }
+
+    async function startBarcodeScanner() {
+      const ZXing = window.ZXing;
+      const codeReader = new ZXing.BrowserBarcodeReader();
+      window.barcodeReader = codeReader;
+
+      try {
+        const devices = await codeReader.getVideoInputDevices();
+        const selectedDeviceId = devices[0].deviceId;
+
+        await codeReader.decodeFromVideoDevice(selectedDeviceId, barcodeVideo, async (result, err) => {
+          if (result) {
+            const barcode = result.getText();
+            barcodeResult.textContent = `Barkod: ${barcode}`;
+
+            const token = localStorage.getItem("token");
+            const response = await fetch("http://127.0.0.1:8000/greenlens/scan", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: JSON.stringify({ barcode })
+            });
+
+            const data = await response.json();
+            barcodeResult.textContent += `\n\nGemini Raporu:\n${data.report}`;
+            codeReader.reset();
+          } else if (err && !(err instanceof ZXing.NotFoundException)) {
+            barcodeResult.textContent = "Barkod okuma hatası: " + err;
+          }
+        });
+      } catch (err) {
+        barcodeResult.textContent = `Kamera Hatası: ${err.message}`;
+      }
+    }
+  </script>
+</body>
+</html>
